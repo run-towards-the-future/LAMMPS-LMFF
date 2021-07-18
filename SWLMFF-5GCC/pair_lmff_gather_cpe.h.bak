@@ -1,0 +1,674 @@
+void compute_lmff_gather_para(pair_lmff_param_t *pm)
+{
+	//lwpf_enter(LMFF);
+	//lwpf_start(ALL);
+
+	//lwpf_start(BEFORE);
+	dma_init();
+	pair_lmff_param_t l_pm;
+	pe_get(pm, &l_pm, sizeof(pair_lmff_param_t));
+	dma_syn();
+
+  int i,j,k,ii,jj,kk,inum,gnum,jnum;
+  int itype,jtype,ktype,iparam_ij,iparam_ijk;
+  tagint itag,jtag;
+  double xtmp,ytmp,ztmp,delx,dely,delz,evdwl,fpair;
+  double rsq,rsq1,rsq2;
+  double delr1[3],delr2[3],fi[3],fj[3];
+  double zeta_ij,prefactor;
+  int *ilist,*jlist,*numneigh,**firstneigh;
+
+  evdwl = 0.0;
+
+
+	double (*x)[3]				= l_pm.x;
+  double (*f)[3]				= l_pm.f;
+  tagint *tag						= l_pm.tag;
+  tagint *molecule			= l_pm.molecule;
+  int *type							= l_pm.type;
+  int ntypes						= l_pm.ntypes;
+  int nlocal						= l_pm.nlocal;
+  int newton_pair				= l_pm.newton_pair;
+  double cutshortsq 		= l_pm.cutshortsq;
+	int nelements					= l_pm.nelements;       
+  int nparams						= l_pm.nparams;         
+	Param *ters_params		= l_pm.ters_params;       
+	int maxshort					= l_pm.maxshort;
+	atom_in *my_atoms			= l_pm.my_atoms;
+
+	int eflag						= l_pm.eflag;
+	int evflag					= l_pm.evflag;
+	int eflag_either		= l_pm.eflag_either;
+	int eflag_global		= l_pm.eflag_global;
+	int eflag_atom			= l_pm.eflag_atom;
+	int vflag						= l_pm.vflag;
+	int vflag_either		= l_pm.vflag_either;
+	int vflag_global		= l_pm.vflag_global;
+	int vflag_atom			= l_pm.vflag_atom;
+	
+	inum				= l_pm.inum;
+	gnum				= l_pm.gnum;
+  ilist				= l_pm.ilist;
+  numneigh		= l_pm.numneigh;
+  firstneigh	= l_pm.firstneigh;
+	int *nummol = l_pm.nummol;
+	
+	//buffer atom info for neighshort;
+	ParamBf neighBf[20];
+	int neighshort[20];
+
+	/*** variables for ILP ***/
+  int l, ll;
+  double erep, r,Rcut,r2inv,r6inv,r8inv;
+	double Tap,dTap,Vilp,TSvdw,TSvdw2inv,fsum;
+  erep = 0.0;
+	//Vars for calc_normal
+  int id,ip,m;
+  double nn, nn2;
+  double pv12[3],pv31[3],pv23[3],n1[3],dni[3],dnn[3][3],vet[3][3],dpvdri[3][3];
+  double dn1[3][3][3],dpv12[3][3][3],dpv23[3][3][3],dpv31[3][3][3];
+  double normal[3], dnormal[3][3][3], dnormdri[3][3];
+  //Vars for calc_Frep
+  double prodnorm1,fkcx,fkcy,fkcz;
+  double rhosq1,exp0,exp1;
+  double frho1,Erep,rdsq1,fpair1;
+  double dprodnorm1[3] = {0.0, 0.0, 0.0};
+  double fp1[3] = {0.0, 0.0, 0.0};
+  double fprod1[3] = {0.0, 0.0, 0.0};
+  double delkj[3] = {0.0, 0.0, 0.0};
+  double fk[3] = {0.0, 0.0, 0.0};
+  double fkk[3][3], ekk[3], vkk[3][6];
+  //more for overflow
+  int ilp_neigh[6];
+	//transfer from force cls;
+	int ilp_nelements					= l_pm.ilp_nelements;       
+  int ilp_nparams						= l_pm.ilp_nparams;         
+	int ilp_tap_flag					= l_pm.ilp_tap_flag;
+	Param_ilp_str *ilp_params = l_pm.ilp_params;       
+	
+	double eng_virial[16];
+	for(i = 0; i < 16; i++)
+    eng_virial[i] = 0;
+  double *p_eng_vdwl	= eng_virial;
+  double *p_eng_coul	= p_eng_vdwl + 1; 
+  double *p_virial		= p_eng_coul + 1;
+  double *pvector			= p_virial	 + 6;
+	
+	bigint ntimestep  = l_pm.ntimestep;
+  bigint lastcall   = l_pm.lastcall;
+	int myrank				= l_pm.myrank;
+	long *mylock			= l_pm.mylock;
+	rvec4 *frc				= l_pm.frc;
+	//write_cache;
+	int wfctag[WRT_C_LCNT];
+	rvec4 wfcache[WRT_C_LCNT][WRT_C_LSZ];
+  for(i = 0; i < WRT_C_LCNT; i++)
+    wfctag[i] = -1;
+	rvec4 bwf[WRT_C_LSZ];
+	rvec4 fwi, fwj;//, fwk;//ILP+Tersoff;
+	fwi[0] = fwi[1] = fwi[2] = fwi[3] = 0;
+	fwj[0] = fwj[1] = fwj[2] = fwj[3] = 0;
+
+	rvec4 fwk[20];
+	//read_cache;
+  int read_ctag[READ_C_LCNT];
+  atom_in atoms_cache[READ_C_LCNT][READ_C_LSZ];
+  for(i = 0; i < READ_C_LCNT; i++)
+    read_ctag[i] = -1;
+	
+	double fxtmp,fytmp,fztmp;
+	atom_in *iatom, *jatom;
+
+	int ist, ied, isz, ioff;
+	int jst, jed, jsz, joff;
+	int ni[ISTEP], *fni[ISTEP], nmi[ISTEP];
+  int jlist_buf[JSTEP];
+	atom_in ai[ISTEP];
+
+
+	int nt = ntypes+1;
+	int ne = nelements;
+	int ne3 = ne * ne * ne;
+	int map[nt], elem2param[ne*ne*ne];
+	int iskip[nt], ijskip[nt][nt];
+	
+	int ilp_ne2 = ilp_nelements * ilp_nelements;
+	int ilp_map[nt], ilp_elem2param[ilp_ne2];
+	double ilp_cutsq[nt*nt], ilp_cutILPsq[ilp_ne2];
+  pe_get(l_pm.map,									map,									sizeof(int)*nt);
+  pe_get(&(l_pm.elem2param[0]),			&(elem2param[0]),			sizeof(int)*ne3);
+	pe_get(&(l_pm.iskip[0]),					&(iskip[0]),					sizeof(int)*nt);
+	pe_get(&(l_pm.ijskip[0]),					&(ijskip[0][0]),			sizeof(int)*nt*nt);
+
+  pe_get(l_pm.ilp_map,        			ilp_map,							sizeof(int)*nt);
+  pe_get(&(l_pm.ilp_cutsq[0]),      &(ilp_cutsq[0]),			sizeof(double)*nt*nt);
+  pe_get(&(l_pm.ilp_cutILPsq[0]),		&(ilp_cutILPsq[0]),		sizeof(double)*ilp_ne2);
+  pe_get(&(l_pm.ilp_elem2param[0]), &(ilp_elem2param[0]), sizeof(int)*ilp_ne2);
+	dma_syn();
+	
+	//lwpf_stop(BEFORE);
+
+	//lwpf_start(CMP);
+  // loop over full neighbor list of my atoms
+  for (ist = _MYID*ISTEP; ist < inum; ist += 64*ISTEP) 
+	{
+		ied = ist + ISTEP;
+    if(ied > inum)
+      ied = inum;
+    isz = ied -ist;
+	
+		pe_get(firstneigh+ist,  fni,	sizeof(int*)*isz);
+    pe_get(numneigh+ist,    ni,   sizeof(int)*isz);
+    pe_get(nummol+ist,			nmi,  sizeof(int)*isz);
+		pe_get(my_atoms+ist,    ai,   sizeof(atom_in)*isz);
+		dma_syn();
+		for (ii = ist; ii < ied; ii++) 
+		{//ILP+Tersoff
+			//i = ilist[ii];
+			i = ii;
+			ioff = ii - ist;
+			iatom = &ai[ioff];
+			xtmp = iatom->x[0];
+  	  ytmp = iatom->x[1];
+  	  ztmp = iatom->x[2];
+  	  int itypem = ilp_map[iatom->type];
+  	  itag = iatom->tag;
+  	  
+			jlist = fni[ioff];
+  	  jnum = ni[ioff];
+  	  int nilp = 0;
+			int numlayer = nmi[ioff];
+			
+			//TERSOFF
+  	  itype = map[iatom->type];
+  	  int numshort = 0;
+  	  fxtmp = fytmp = fztmp = 0.0;
+		
+			fwi[0] = fwi[1] = fwi[2] = fwi[3] = 0;
+
+			//lwpf_start(SHORT);
+			//for (jst = 0; jst < jnum; jst+=JSTEP) 
+			for (jst = 0; jst < numlayer; jst+=JSTEP) 
+			{
+				jed = jst + JSTEP;
+				if(jed > numlayer)
+					jed = numlayer;
+				jsz = jed - jst;
+			
+				pe_get(jlist+jst, jlist_buf, sizeof(int)*jsz);
+				dma_syn();
+			
+				for (jj = jst; jj < jed; jj++) 
+				{
+					joff = jj - jst;
+  	  	  //j = jlist[jj];
+  	  	  j = jlist_buf[joff];
+					if (read_ctag[(j >> READ_C_S) & READ_C_LM] != j >> READ_C_S)
+  				{
+  				  pe_get(my_atoms + (j & ~READ_C_MM), 
+  				        atoms_cache[(j >> READ_C_S) & READ_C_LM], 
+  				        sizeof(atom_in) * READ_C_LSZ);
+  				  dma_syn();
+  				  read_ctag[(j >> READ_C_S) & READ_C_LM] = j >> READ_C_S;
+  				}
+  				jatom = &atoms_cache[(j >> READ_C_S) & READ_C_LM][j & READ_C_MM];
+					//jatom = &my_atoms[j];
+
+  	  	  int jtypem = ilp_map[jatom->type];
+  	  	  jtag = jatom->tag;
+
+  	  	  delx = xtmp - jatom->x[0];
+  	  	  dely = ytmp - jatom->x[1];
+  	  	  delz = ztmp - jatom->x[2];
+  	  	  rsq = delx*delx + dely*dely + delz*delz;
+
+  	  	  if(rsq != 0 && rsq < ilp_cutILPsq[itypem*nelements+jtypem] && iatom->molecule == jatom->molecule)
+					{
+  	  	    ilp_neigh[nilp] = j;
+  	  	    vet[nilp][0] = -delx;
+  	  	    vet[nilp][1] = -dely;
+  	  	    vet[nilp][2] = -delz;
+  	  	    nilp ++;
+  	  	  }
+					
+					//TERSOFF
+  	  	  if(!iskip[iatom->type] && !ijskip[iatom->type][jatom->type])
+					{
+						if (rsq < cutshortsq) 
+						{
+							neighBf[numshort].rsq = rsq;
+							neighBf[numshort].r = sqrt(rsq);
+							neighBf[numshort].rinv = 1/neighBf[numshort].r;
+							neighBf[numshort].delr[0] = -delx;
+							neighBf[numshort].delr[1] = -dely;
+							neighBf[numshort].delr[2] = -delz;
+							//neighBf[numshort].id = j;
+							neighBf[numshort].tp = map[jatom->type];
+							neighBf[numshort].padding = 0;
+
+							int ters_flag = 1;
+							if (itag > jtag) 
+							{
+    					  if ((itag+jtag) % 2 == 0) {ters_flag = 0; }
+    					} 
+							else if (itag < jtag) 
+							{
+    					  if ((itag+jtag) % 2 == 1) {ters_flag = 0; }
+    					} 
+							else 
+							{
+    					  if (jatom->x[2] < iatom->x[2]) {ters_flag = 0;}
+    					  if (jatom->x[2] == iatom->x[2] && jatom->x[1] <  iatom->x[1]) {ters_flag = 0; }
+    					  if (jatom->x[2] == iatom->x[2] && jatom->x[1] == iatom->x[1] && jatom->x[0] < iatom->x[0]) {ters_flag = 0;}
+    					}
+							neighBf[numshort].ters_flag = ters_flag;
+
+  	  	  	  neighshort[numshort++] = j;
+
+							#ifdef MY_DEBUG
+  	  	  	  if (numshort > 4) 
+							{
+								printf("numshort > 4, numshort=%d\n", numshort);
+  	  	  	  }
+							#endif 
+  	  	  	}
+					}//if-notSkip
+  	  	}//for-jj
+			}//for-jst
+			//lwpf_stop(SHORT);
+
+			calc_normal(nilp, jnum, vet, normal, dnormal, dnormdri);
+  	  
+			for (kk = 0; kk < nilp; kk ++) 
+			{
+  	    fkk[kk][0] = 0.0;
+  	    fkk[kk][1] = 0.0;
+  	    fkk[kk][2] = 0.0;
+  	    vkk[kk][0] = 0.0;
+  	    vkk[kk][1] = 0.0;
+  	    vkk[kk][2] = 0.0;
+  	    vkk[kk][3] = 0.0;
+  	    vkk[kk][4] = 0.0;
+  	    vkk[kk][5] = 0.0;
+  	    ekk[kk] = 0.0;
+  	  } 
+			jlist = fni[ioff];
+  	  jnum = ni[ioff];
+
+			//lwpf_start(ILP);
+			//for (jst = 0; jst < jnum; jst+=JSTEP) 
+			for (jst = numlayer; jst < jnum; jst+=JSTEP) 
+			{
+				jed = jst + JSTEP;
+				if(jed > jnum)
+					jed = jnum;
+				jsz = jed - jst;
+				
+				pe_get(jlist+jst, jlist_buf, sizeof(int)*jsz);
+				dma_syn();
+				
+				for (jj = jst; jj < jed; jj++) 
+				{
+					joff = jj - jst;
+  	  	  j = jlist_buf[joff];
+  	  	  j &= NEIGHMASK;
+					if (read_ctag[(j >> READ_C_S) & READ_C_LM] != j >> READ_C_S)
+  				{
+  				  pe_get(my_atoms + (j & ~READ_C_MM), 
+  				        atoms_cache[(j >> READ_C_S) & READ_C_LM], 
+  				        sizeof(atom_in) * READ_C_LSZ);
+  				  dma_syn();
+  				  read_ctag[(j >> READ_C_S) & READ_C_LM] = j >> READ_C_S;
+  				}
+  				jatom = &atoms_cache[(j >> READ_C_S) & READ_C_LM][j & READ_C_MM];
+		
+					fwj[0] = fwj[1] = fwj[2] = fwj[3] = 0;
+
+  	  	  jtag = jatom->tag;
+  	  	  delx = xtmp - jatom->x[0];
+  	  	  dely = ytmp - jatom->x[1];
+  	  	  delz = ztmp - jatom->x[2];
+  	  	  rsq = delx*delx + dely*dely + delz*delz;
+
+					//int ters_flag = 1;
+  	  	  int vdwflag = 1;
+					if (itag > jtag) 
+					{
+  	  		  if ((itag+jtag) % 2 == 0) {/*ters_flag = 0; */vdwflag = 0;}
+  	  		} 
+					else if (itag < jtag) 
+					{
+  	  		  if ((itag+jtag) % 2 == 1) {/*ters_flag = 0;*/ vdwflag = 0;}
+  	  		} 
+					else 
+					{
+  	  		  if (jatom->x[2] < iatom->x[2]) {/*ters_flag = 0;*/ vdwflag = 0;}
+  	  		  if (jatom->x[2] == ztmp && iatom->x[1] < ytmp) {/*ters_flag = 0;*/ vdwflag = 0;}
+
+  	  		  if (jatom->x[2] == ztmp && iatom->x[1] == ytmp && iatom->x[0] < xtmp) {/*ters_flag = 0;*/ vdwflag = 0;}
+  	  		}
+
+  	  	  jtype = map[jatom->type];
+					r = sqrt(rsq);
+  	  	  double rinv = 1.0 / r;
+					
+  	  	  if (rsq < ilp_cutsq[iatom->type*nt+jatom->type] && iatom->molecule != jatom->molecule) 
+					{
+
+  	  	    int iparam_ij = ilp_elem2param[ilp_map[iatom->type] *nelements+ ilp_map[jatom->type]];
+  	  	    Param_ilp_str *p = &ilp_params[iparam_ij];
+
+  	  	    if (ilp_tap_flag) 
+						{
+  	  	      Rcut = sqrt(ilp_cutsq[iatom->type*nt+jatom->type]);
+  	  	      Tap = calc_Tap(r,Rcut);
+  	  	      dTap = calc_dTap(r,Rcut);
+  	  	    } 
+						else {Tap = 1.0; dTap = 0.0;}
+
+  	  	    double fvdw = 0, evdw = 0;
+  	  	    
+  	  	    if (vdwflag) 
+						{
+							r2inv = rinv * rinv;
+							r6inv = r2inv*r2inv*r2inv;
+							r8inv = r6inv*r2inv;
+							
+							//TSvdw = 1.0 + exp(-p->d*(r/p->seff - 1.0));
+							TSvdw = 1.0 + xexp(-p->d*(r*p->seffinv - 1.0));
+							double TSvdwinv = 1.0 / TSvdw;
+							TSvdw2inv = TSvdwinv * TSvdwinv; //1 / (TSvdw * TSvdw);//pow(TSvdw,-2.0);
+							double vvdw = -p->C6*r6inv*TSvdwinv; //-p->C6*r6inv/TSvdw;
+							
+							// derivatives
+							//fpair = -6.0*p->C6*r8inv/TSvdw + p->C6*p->d/p->seff*(TSvdw-1.0)*TSvdw2inv*r8inv*r;
+							//fpair = -6.0*p->C6*r8inv/TSvdw + p->C6*p->d*p->seffinv*(TSvdw-1.0)*TSvdw2inv*r8inv*r;
+							fpair = -6.0*p->C6*r8inv*TSvdwinv + p->C6*p->d*p->seffinv*(TSvdw-1.0)*TSvdw2inv*r8inv*r;
+							fsum = fpair*Tap - vvdw*dTap*rinv;
+							
+							fvdw = fsum;
+							evdw = vvdw * Tap;
+
+							if(eflag)
+  	  	      {
+  	  	        pvector[0] += evdw;
+  	  	      }
+  	  	    }
+						
+						// Calculate the transverse distance
+  	  	    prodnorm1 = normal[0]*delx + normal[1]*dely + normal[2]*delz;
+  	  	    rhosq1 = rsq - prodnorm1*prodnorm1;  // rho_ij
+  	  	    rdsq1 = rhosq1*p->delta2inv; // (rho_ij/delta)^2
+
+  	  	    // store exponents
+  	  	    exp0 = xexp(-p->lambda*(r-p->z0));
+  	  	    exp1 = xexp(-rdsq1);
+
+  	  	    frho1 = exp1*p->C;
+  	  	    Erep = 0.5*p->epsilon + frho1;
+  	  	    Vilp = exp0*Erep;
+
+  	  	    // derivatives
+  	  	    fpair  = p->lambda*exp0*rinv*Erep;
+  	  	    fpair1 = 2.0*exp0*frho1*p->delta2inv;
+  	  	    fsum = fpair + fpair1;
+
+  	  	    // derivatives of the product of rij and ni, the result is a vector
+  	  	    dprodnorm1[0] = dnormdri[0][0]*delx + dnormdri[1][0]*dely + dnormdri[2][0]*delz;
+  	  	    dprodnorm1[1] = dnormdri[0][1]*delx + dnormdri[1][1]*dely + dnormdri[2][1]*delz;
+  	  	    dprodnorm1[2] = dnormdri[0][2]*delx + dnormdri[1][2]*dely + dnormdri[2][2]*delz;
+  	  	    fp1[0] = prodnorm1*normal[0]*fpair1;
+  	  	    fp1[1] = prodnorm1*normal[1]*fpair1;
+  	  	    fp1[2] = prodnorm1*normal[2]*fpair1;
+  	  	    fprod1[0] = prodnorm1*dprodnorm1[0]*fpair1;
+  	  	    fprod1[1] = prodnorm1*dprodnorm1[1]*fpair1;
+  	  	    fprod1[2] = prodnorm1*dprodnorm1[2]*fpair1;
+
+  	  	    fkcx = (delx*fsum - fp1[0])*Tap - Vilp*dTap*delx*rinv;
+  	  	    fkcy = (dely*fsum - fp1[1])*Tap - Vilp*dTap*dely*rinv;
+  	  	    fkcz = (delz*fsum - fp1[2])*Tap - Vilp*dTap*delz*rinv;
+
+  	  	    //This should be no use because fkcx need a lot of variables
+  	  	    double ftotx = fvdw * delx + fkcx;
+  	  	    double ftoty = fvdw * dely + fkcy;
+  	  	    double ftotz = fvdw * delz + fkcz;
+						fwi[0] += ftotx - fprod1[0]*Tap;
+  	  	    fwi[1] += ftoty - fprod1[1]*Tap;
+  	  	    fwi[2] += ftotz - fprod1[2]*Tap;
+  	  	    fwj[0] -= ftotx;
+  	  	    fwj[1] -= ftoty;
+  	  	    fwj[2] -= ftotz;
+						
+
+  	  	    for (kk = 0; kk < nilp; kk++) 
+						{
+  	  	      k = ilp_neigh[kk];
+  	  	      dprodnorm1[0] = dnormal[kk][0][0]*delx + dnormal[kk][1][0]*dely + dnormal[kk][2][0]*delz;
+  	  	      dprodnorm1[1] = dnormal[kk][0][1]*delx + dnormal[kk][1][1]*dely + dnormal[kk][2][1]*delz;
+  	  	      dprodnorm1[2] = dnormal[kk][0][2]*delx + dnormal[kk][1][2]*dely + dnormal[kk][2][2]*delz;
+  	  	      fk[0] = (-prodnorm1*dprodnorm1[0]*fpair1)*Tap;
+  	  	      fk[1] = (-prodnorm1*dprodnorm1[1]*fpair1)*Tap;
+  	  	      fk[2] = (-prodnorm1*dprodnorm1[2]*fpair1)*Tap;
+  	  	      fkk[kk][0] += fk[0];
+  	  	      fkk[kk][1] += fk[1];
+  	  	      fkk[kk][2] += fk[2];
+  	  	      delkj[0] = iatom->x[0] + vet[kk][0] - jatom->x[0];
+  	  	      delkj[1] = iatom->x[1] + vet[kk][1] - jatom->x[1];
+  	  	      delkj[2] = iatom->x[2] + vet[kk][2] - jatom->x[2];
+							
+  	  	      if (evflag) 
+							{
+
+								if (vflag_either && vflag_global) 
+								{
+								  p_virial[0] += delkj[0]*fk[0];
+								  p_virial[1] += delkj[1]*fk[1];
+								  p_virial[2] += delkj[2]*fk[2];
+								  p_virial[3] += delkj[0]*fk[1];
+								  p_virial[4] += delkj[0]*fk[2];
+								  p_virial[5] += delkj[1]*fk[2];
+								}//ec_tally_buffer_simple;
+							}
+
+  	  	    }
+
+  	  	    //erep = Tap*Vilp;
+  	  	    if (eflag) pvector[1] += erep = Tap*Vilp;
+  	  	    if (evflag) 
+						{
+							if (eflag_either && eflag_global) 
+								*p_eng_vdwl += (erep+evdw);
+  						if (vflag_either && vflag_global) 
+							{
+								p_virial[0] += delx*ftotx;
+  						  p_virial[1] += dely*ftoty;
+  						  p_virial[2] += delz*ftotz;
+  						  p_virial[3] += delx*ftoty;
+  						  p_virial[4] += delx*ftotz;
+  						  p_virial[5] += dely*ftotz;
+  						}//ev_tally_xyz_simple
+						}
+  	  	  }//if-rsq-ilp
+					
+					//lwpf_start(UPDTJ);
+					update_cache_ters(j, fwj, wfcache, wfctag, frc, mylock);
+					//lwpf_stop(UPDTJ);
+  	  	} // loop over jj
+
+			}
+			//lwpf_stop(ILP);
+
+			//lwpf_start(UPDTK);
+			for (kk = 0; kk < nilp; kk ++) 
+			{
+  	    int k = ilp_neigh[kk];
+				update_cache_ters(k, fkk[kk], wfcache, wfctag, frc, mylock);
+  	  }//for-kk
+			//lwpf_stop(UPDTK);
+
+			/* fix bug */
+			for(kk = 0; kk < numshort; kk++)
+			{
+				fwk[kk][0] = 0.0;
+				fwk[kk][1] = 0.0;
+				fwk[kk][2] = 0.0;
+				fwk[kk][3] = 0.0;
+			}
+
+		
+			//lwpf_start(TERSOFF);
+
+			/*** Tersoff ***/
+  	  // three-body interactions
+  	  // skip immediately if I-J is not within cutoff
+  	  double fjxtmp,fjytmp,fjztmp;
+			double *dlr1, *dlr2, r1, r2, r1inv, r2inv;	
+  	  for (jj = 0; jj < numshort; jj++) 
+			{
+  	    j = neighshort[jj];
+				jtype = neighBf[jj].tp;
+  	    iparam_ij = elem2param[(itype*nelements+jtype)*nelements+jtype];
+				dlr1 = neighBf[jj].delr;
+				rsq1 = neighBf[jj].rsq;
+				r1 = neighBf[jj].r;
+				r1inv = neighBf[jj].rinv;
+  	    if (rsq1 >= ters_params[iparam_ij].cutsq) continue;
+
+  	    fjxtmp = fjytmp = fjztmp = 0.0;
+			
+				//Repulsive for Tersoff
+				double Rep_evdwl = 0, Rep_fpair = 0;
+				double fc, fc_d, tmp_exp;
+				Param *param = &ters_params[iparam_ij];
+				if (r1 < param->bigr-param->bigd) {fc = 1.0; fc_d = 0.0;}
+				else if (r1 > param->bigr+param->bigd) {fc = 0.0; fc_d = 0.0;}
+				else 
+				{
+					fc = 0.5*(1.0 - xsin(MY_PI2*(r1 - param->bigr)*param->bigdinv )); 
+					fc_d =  -(MY_PI4*param->bigdinv) * xcos(MY_PI2*(r1 - param->bigr)*param->bigdinv);
+				}
+
+  			tmp_exp = xexp(-param->lam1 * r1);
+  			fpair = -param->biga * tmp_exp * (fc_d - fc*param->lam1) * r1inv;
+  			if (eflag) evdwl = fc * param->biga * tmp_exp;
+				
+				if(neighBf[jj].ters_flag)
+				{
+      		fxtmp		+= -dlr1[0]*fpair;
+      		fytmp 	+= -dlr1[1]*fpair;
+      		fztmp 	+= -dlr1[2]*fpair;
+					fjxtmp	-= -dlr1[0]*fpair;
+      		fjytmp	-= -dlr1[1]*fpair;
+      		fjztmp 	-= -dlr1[2]*fpair;
+
+					Rep_evdwl = evdwl;
+					Rep_fpair = fpair;
+				}//if-ters_flag-notSkip
+
+
+  	    // accumulate bondorder zeta for each i-j interaction via loop over k
+  	    zeta_ij = 0.0;
+
+  	    for (kk = 0; kk < numshort; kk++) 
+				{
+  	      if (jj == kk) continue;
+  	      k = neighshort[kk];
+					ktype = neighBf[kk].tp;
+					iparam_ijk = elem2param[(itype*nelements+jtype)*nelements+ktype];
+					dlr2 = neighBf[kk].delr;
+					rsq2 = neighBf[kk].rsq;
+					r2 = neighBf[kk].r;
+					r2inv = neighBf[kk].rinv;
+  	    	if (rsq2 >= ters_params[iparam_ijk].cutsq) continue;
+  	      zeta_ij += ters_zeta(&ters_params[iparam_ijk],r1,r1inv,r2,r2inv,dlr1,dlr2);
+  	    }
+
+  	    // pairwise force due to zeta
+  	    ters_force_zeta(&ters_params[iparam_ij],r1,r1inv,zeta_ij,&fpair,&prefactor,eflag,&evdwl);
+				
+				fxtmp += dlr1[0]*fpair;
+  	    fytmp += dlr1[1]*fpair;
+  	    fztmp += dlr1[2]*fpair;
+  	    fjxtmp -= dlr1[0]*fpair;
+  	    fjytmp -= dlr1[1]*fpair;
+  	    fjztmp -= dlr1[2]*fpair;
+
+				
+
+  	    // attractive term via loop over k
+  	    for (kk = 0; kk < numshort; kk++) 
+				{
+  	      if (jj == kk) continue;
+  	      k = neighshort[kk];
+					ktype = neighBf[kk].tp;
+					iparam_ijk = elem2param[(itype*nelements+jtype)*nelements+ktype];
+					dlr2 = neighBf[kk].delr;
+					rsq2 = neighBf[kk].rsq;
+					r2 = neighBf[kk].r;
+					r2inv = neighBf[kk].rinv;
+  	    	if (rsq2 >= ters_params[iparam_ijk].cutsq) continue;
+  	      ters_Att(&ters_params[iparam_ijk],prefactor,r1,r1inv,r2,r2inv,dlr1,dlr2,fi,fj,fk);
+
+  	      fxtmp += fi[0];
+  	      fytmp += fi[1];
+  	      fztmp += fi[2];
+  	      fjxtmp += fj[0];
+  	      fjytmp += fj[1];
+  	      fjztmp += fj[2];
+					fwk[kk][0] += fk[0];
+  	      fwk[kk][1] += fk[1];
+  	      fwk[kk][2] += fk[2];
+  	    }
+				fwk[jj][0] += fjxtmp;
+  	    fwk[jj][1] += fjytmp;
+  	    fwk[jj][2] += fjztmp;
+				
+				if(evflag)
+				{
+					if (eflag_either && eflag_global) 
+					{
+  				  *p_eng_vdwl += (Rep_evdwl + evdwl);
+					}
+  				if (vflag_either && vflag_global) 
+					{
+						p_virial[0] += -dlr1[0]*dlr1[0]*(Rep_fpair + fpair);
+  				  p_virial[1] += -dlr1[1]*dlr1[1]*(Rep_fpair + fpair);
+  				  p_virial[2] += -dlr1[2]*dlr1[2]*(Rep_fpair + fpair);
+  				  p_virial[3] += -dlr1[0]*dlr1[1]*(Rep_fpair + fpair);
+  				  p_virial[4] += -dlr1[0]*dlr1[2]*(Rep_fpair + fpair);
+  				  p_virial[5] += -dlr1[1]*dlr1[2]*(Rep_fpair + fpair);
+  				}
+				}//ev_tally_simple;
+  	  }
+			
+			//lwpf_stop(TERSOFF);
+		
+			//lwpf_start(UPDTKI);
+			for (kk = 0; kk < numshort; kk ++) 
+			{
+  	    int k = neighshort[kk];
+				update_cache_ters(k, fwk[kk], wfcache, wfctag, frc, mylock);
+  	  }//for-kk
+
+			
+			fwi[0] += fxtmp;
+			fwi[1] += fytmp;
+  	  fwi[2] += fztmp;
+			
+			update_cache_ters(i, fwi, wfcache, wfctag, frc, mylock);
+			//lwpf_stop(UPDTKI);
+			
+  	}//for-ii
+	}//for-ist
+	//lwpf_stop(CMP);
+
+	//lwpf_start(FLUSH);
+	flush_cache_ters(frc, wfcache, wfctag, mylock);
+	//lwpf_stop(FLUSH);
+
+	pe_put(l_pm.pack64+_MYID*16, eng_virial, sizeof(double)*16);
+	dma_syn();
+	
+	//lwpf_stop(ALL);
+	//lwpf_exit(LMFF);
+}

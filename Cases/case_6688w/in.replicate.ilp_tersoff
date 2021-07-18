@@ -1,0 +1,122 @@
+# the lower layer is subjected to langevin thermostat, the upper layer is subjected to nve
+units    metal
+
+variable SX index 1
+variable SY index 1
+
+variable DX equal ${SX}*1
+variable DY equal ${SY}*1
+
+# variables
+variable F equal -0.000269*0.06242  # C-C=1.43876, F*2atoms/area-of-hex-ring(5.3781A^2)=1MPa
+
+variable ITV1 equal 10 #1000 # dump/thermo interval
+variable ITV2 equal 10 #5000
+variable ITV3 equal 10 #10000
+
+variable T equal 100.0
+variable damp equal 1.0
+
+variable V equal 0.01 # velocity of slider: 0.01A/ps, i.e. 1m/s
+variable KL equal 10.0*0.06242 # slider-hi spring: 10N/m
+variable KX equal 0.01196*0.06242# side spring: totally KX*N(l6)=10N/m
+
+atom_style    full # for KC
+dimension    3
+boundary    p p p
+timestep    0.001 # i.e. 1fs
+
+#read_data    16mil0.data # each layer has 8360000 atoms, built from 100*100 pieces of blocks with 836 C atoms
+
+read_data    x4.data 
+
+# define groups
+group    l1 type 1
+group    l2 type 2
+
+# interaction
+# pair_style    hybrid tersoff lj/cut 12.0
+pair_style    hybrid/overlay tersoff ilp/graphene/hbn 16.0 0
+pair_coeff    * *  tersoff C.opt.tersoff C(O) C(O)
+# interlayer C: lj/cut or ILP
+# pair_coeff    1 2  lj/cut 3.724e-3 3.39967 # ACS AMI 2020, 12, 35757-35764
+pair_coeff    * *  ilp/graphene/hbn BNCH.ILP C C
+# l1 and l6
+# pair_coeff    1 1  lj/cut 0.0 0.0
+
+neighbor      2.0 bin
+neigh_modify  one 20000 page 200000
+
+#replicate 2 1 1
+replicate  ${DX} ${DY}   1
+
+# computes and thermo
+compute  1  l2  reduce ave z
+
+thermo_style  custom step c_1 press temp etotal
+thermo      ${ITV1}
+#dump        1 all atom ${ITV1} fric.lammpstrj
+#dump_modify 1 sort 1 first no
+
+# fix    sf  l1  setforce 0.0 0.0 0.0
+# minimize
+minimize    1.0e-5 1.0e-5 1000 10000
+
+reset_timestep 0
+
+velocity all create ${T} 4928459 rot yes dist gaussian
+
+# fix    sprx   l2  spring/self ${KX} x # side spring
+
+fix    1   l2    nve
+fix    5   l2  momentum 1 linear 0 0 0 angular
+#run  100000
+run  50
+
+unfix  5
+fix    5   l2  momentum 1 linear 1 1 0 angular
+# fix    2   l2  addforce 0.0 0.0 ${F}
+#run  100000
+run  50
+
+unfix  1
+unfix  5
+
+#######################
+# final equilibration #
+# nvt
+#######################
+
+fix    t1   l1  langevin  ${T} ${T} ${damp} 4928459 zero yes
+fix    n1   l1 nve
+
+fix    t2   l2  langevin  ${T} ${T} ${damp} 4928459 zero yes
+compute     2temp  l2 temp/com
+fix_modify    t2 temp 2temp
+fix    n2   l2 nve
+
+thermo_style  custom step c_1 press etotal c_2temp
+thermo      ${ITV2}
+
+#run 500000
+run 50
+
+#write_restart restart.finaleq
+
+unfix t2
+
+velocity l2 scale ${T}
+
+##################
+# production run #
+##################
+
+compute     l2COM   l2 com
+thermo      ${ITV3}
+
+fix   pull  l2  smd cvel  ${KL} $V tether NULL -1000.0 NULL 0.0 # pull along y
+fix   out1  l2  ave/time 100 1 100  c_l2COM[1] c_l2COM[2] c_l2COM[3] file  l2COM.dat
+fix   out2  l2  ave/time 100 1 100  f_pull[1] f_pull[2] f_pull[3] file  pullforce.dat
+
+#run 5000000
+run 50
