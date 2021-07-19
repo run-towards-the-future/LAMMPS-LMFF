@@ -2,7 +2,7 @@
 
 
 ## A.Abstract
-* LAMMPS is one of the most popular Molecular Dynamic (MD) packages and is widely used in the field of physics, chemistry and materials simulation. Layered Materials Force Field (LMFF) is our expansion of the LAMMPS potential function based on the Tersoff potential and  inter-layer potential (ILP) in LAMMPS. LMFF is designed to study layered materials such as graphene and boron hexanitride. It is universal and does not depend on any platform. We have also carried out a series of optimizations on LMFF and the optimization work is carried out on the new generation of Sunway supercomputer, called SWLMFF. Experiments show that our implementation is efficient, scalable and portable. When generic LMFF is ported to Intel Xeon Gold 6278C, 2$\times$ performance improvement is achieved. For the optimized SWLMFF, the overall performance improvement is nearly 200-330$\times$ compared to the original ILP and Tersoff potentials. And SWLMFF has good parallel efficiency of 95%-100% under weak scaling with 2.7 million atoms on a single process. The maximum atomic system simulated by SWLMFF is close to $2^{31}$ atoms. And nanosecond simulations in one day can be realized.
+* LAMMPS is one of the most popular Molecular Dynamic (MD) packages and is widely used in the field of physics, chemistry and materials simulation. Layered Materials Force Field (LMFF) is our expansion of the LAMMPS potential function based on the Tersoff potential and  inter-layer potential (ILP) in LAMMPS. LMFF is designed to study layered materials such as graphene and boron hexanitride. It is universal and does not depend on any platform. We have also carried out a series of optimizations on LMFF and the optimization work is carried out on the new generation of Sunway supercomputer, called SWLMFF. Experiments show that our implementation is efficient, scalable and portable. When generic LMFF is ported to Intel Xeon Gold 6278C, 2× performance improvement is achieved. For the optimized SWLMFF, the overall performance improvement is nearly 200-330× compared to the original ILP and Tersoff potentials. And SWLMFF has good parallel efficiency of 95%-100% under weak scaling with 2.7 million atoms on a single process. The maximum atomic system simulated by SWLMFF is close to 2^31 atoms. And nanosecond simulations in one day can be realized.
 
 ## B. Description
 * Artifact name: LMFF
@@ -46,10 +46,10 @@
     | Cache        | 256KB             | 512KB                              |
     | CPE Freq.    | 1.45GHz           | 2.25GHz                            |
     | Vector width | 256 bit           | 512 bit                            |
-    | Rergisters   | Vector $ \times $ 32  | Scalar $\times$ 32 + Vector $\times$ 32 |
+    | Rergisters   | Vector × 32  | Scalar × 32 + Vector × 32 |
     | LDM size     | 64KB              | 256KB                              |
-    | Cores        | (1+64) $\times$ 4   | (1+64) $\times$ 6                    |
-    | Bandwidth    | 33.6GB/s $\times$ 4 | 50GB/s $\times$ 6                    |
+    | Cores        | (1+64) × 4   | (1+64) × 6                    |
+    | Bandwidth    | 33.6GB/s × 4 | 50GB/s × 6                    |
 
 
 * Computation resources for TaihuLight can be applied from: http://www.nsccwx.cn/guide/5d301c0724364f0351459268 .
@@ -61,7 +61,7 @@
 ### 3 Datasets
 
 * All the datasets are produced by researchers in the field of superlubricity.
-Please see the files in  _Cases/case$*$/_  with the prefix "_in_" and we provide the data download address : https://www.dropbox.com/sh/urg0yf19agzbagq/AADMoFsZY8dqUKvXgeKCvf3Ua?dl=0 .
+Please see the files in  _Cases/case*/_  with the prefix "_in_" and we provide the data download address : https://www.dropbox.com/sh/urg0yf19agzbagq/AADMoFsZY8dqUKvXgeKCvf3Ua?dl=0 .
 We provide two kinds of cases for testing:
 
     (1) Six-layer graphene: case-5016 (5,016 atoms)
@@ -94,7 +94,7 @@ We provide two kinds of cases for testing:
 **Caution** : For SWLMFF, users can turn on or off  **–DSUNWAY**  option by modifying the Makefile file in: `SWLMFF/MAKE/MACHINES/Makefile.sunway_big` and choose to use or not to use optimization techniques.
 
 ### 6 Run
-When the compilation is done, there will be a binary file named "_lmp$*$_".
+When the compilation is done, there will be a binary file named "_lmp*_".
 
 * Baseline: please refer to the official document of LAMMPS.
 
@@ -115,7 +115,7 @@ When the compilation is done, there will be a binary file named "_lmp$*$_".
 
 ### 7 Experiments for Reproducibility
 * For all experiments, energy minimization is firstly carried. Then run 200 steps of simulation. Thermodynamic results are output once every 10 steps. The performance will be written by LAMMPS in the console and log file named “_log.lammps_”.
-* We evaluate the performance of LMFF and SWLMFF on SW processors and report the speedup on one CG, one node, and one plug-in board. Please refer to the "run.sh" in each directory of  _Cases/case$*$/_ . These results are used to draw Figure 9, Figure 10, and Figure 11 in the paper.
+* We evaluate the performance of LMFF and SWLMFF on SW processors and report the speedup on one CG, one node, and one plug-in board. Please refer to the "run.sh" in each directory of  _Cases/case*/_ . These results are used to draw Figure 9, Figure 10, and Figure 11 in the paper.
 * For the strong and weak scalability, we append  **-var SX <n>**  to the command line arguments to expand the atomic system scale to n times the original size in the x dimension. Please refer to the "run.sh" in each directory of _Cases/case$*$/_ . These results are used to draw Figure 15, Figure 16, Figure 17, and Figure 18 in the paper.
 * For the simulation with the time length of one nanosecond, we evaluate the performance of SWLMFF and the referenced performance of LMFF for two cases:
    
