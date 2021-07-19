@@ -46,7 +46,7 @@
     | Cache        | 256KB             | 512KB                              |
     | CPE Freq.    | 1.45GHz           | 2.25GHz                            |
     | Vector width | 256 bit           | 512 bit                            |
-    | Rergisters   | Vector $\times$ 32  | Scalar $\times$ 32 + Vector $\times$ 32 |
+    | Rergisters   | Vector $ \times $ 32  | Scalar $\times$ 32 + Vector $\times$ 32 |
     | LDM size     | 64KB              | 256KB                              |
     | Cores        | (1+64) $\times$ 4   | (1+64) $\times$ 6                    |
     | Bandwidth    | 33.6GB/s $\times$ 4 | 50GB/s $\times$ 6                    |
