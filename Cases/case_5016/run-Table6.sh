@@ -10,13 +10,22 @@
  #	CRTS_init() --> athread_init() ,	 	
  # 	libc_uncached_malloc() --> malloc() ,
  #  and math functions.
-  bsub -cache_size 0  -o out.SW5.1CG.LMFF	    -q q_test_ss -host_stack 512 -share_size 15000 -priv_size 4 -n 1 -b -cgsp 64  ../../SWLMFF/lmp_sunway_big -in in.replicate
+  rm out.SW5.1Node.Baseline
+  bsub  -o out.SW5.1Node.Baseline	-q q_test_ss -host_stack 256 -share_size 6144 -priv_size 4 -n 4 -b -cgsp 64  ../../Baseline/lmp_sunway_big -in in.replicate.ilp_tersoff
+  rm out.SW5.1Node.SWLMFF
+  bsub  -o out.SW5.1Node.SWLMFF	    -q q_test_ss -host_stack 256 -share_size 6144 -priv_size 4 -n 4 -b -cgsp 64  ../../SWLMFF/lmp_sunway_big -in in.replicate
 
  #We also provide a version on SW26010, named SWLMFF-5GCC
-  bsub -cache_size 0  -o out.SW5.1CG.LMFF	    -q q_test_ss -host_stack 512 -share_size 15000 -priv_size 4 -n 1 -b -cgsp 64  ../../SWLMFF-5GCC/lmp_sunway_big -in in.replicate
+  rm out.SW5.1Node.Baseline
+  bsub -o out.SW5.1Node.Baseline -q q_test_ss -host_stack 256 -share_size 6144 -priv_size 4 -n 4 -b -cgsp 64  ../../Baseline/lmp_sunway_big -in in.replicate.ilp_tersoff
+  rm out.SW5.1Node.SWLMFF
+  bsub -o out.SW5.1Node.SWLMFF	    -q q_test_ss -host_stack 256 -share_size 6144 -priv_size 4 -n 4 -b -cgsp 64  ../../SWLMFF-5GCC/lmp_sunway_big -in in.replicate
   
 
 
 ##SW39000(Sunway SW39000)
- #SWLMFF	 	
-  bsub -cache_size 0  -o out.SW9.1CG.LMFF	    -q q_test_ss -host_stack 512 -share_size 15000 -priv_size 4 -n 1 -b -cgsp 64  ../../SWLMFF/lmp_sunway_big -in in.replicate	
+ #SWLMFF	
+  rm out.SW9.1Node.Baseline
+  bsub -cache_size 0  -o out.SW9.1Node.Baseline -q q_test_ss -host_stack 512 -share_size 15000 -priv_size 4 -n 6 -b -cgsp 64  ../../Baseline/lmp_sunway_big -in in.replicate.ilp_tersoff	
+  rm out.SW9.1Node.SWLMFF	
+  bsub -cache_size 0  -o out.SW9.1Node.SWLMFF	    -q q_test_ss -host_stack 512 -share_size 15000 -priv_size 4 -n 6 -b -cgsp 64  ../../SWLMFF/lmp_sunway_big -in in.replicate	
