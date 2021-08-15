@@ -68,6 +68,7 @@ Please see the files in  _Cases/case*/_  with the prefix "_in_" and we provide t
 We provide two kinds of cases for testing:
 
     (1) Six-layer graphene: case-5016 (5,016 atoms)
+    
     (2) Double-layer graphene: case-1672w (16,720,000 atoms), case-3344w (33,440,000 atoms), case-6688W (66,880,000 atoms), and case-13376w (133,760,000 atoms)
 
 ### 4 Installation
