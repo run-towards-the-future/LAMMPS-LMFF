@@ -202,6 +202,7 @@ void PairLMFF::computeLMFFgeneral(int eflag, int vflag)
   double rhosq1,exp0,exp1;
   double frho1,Erep,rdsq1,fpair1;
   double dprodnorm1[3] = {0.0, 0.0, 0.0};
+	double dprodni[3] = {0.0, 0.0, 0.0};
   double fp1[3] = {0.0, 0.0, 0.0};
   double fprod1[3] = {0.0, 0.0, 0.0};
   double delkj[3] = {0.0, 0.0, 0.0};
@@ -237,6 +238,9 @@ void PairLMFF::computeLMFFgeneral(int eflag, int vflag)
     jlist = firstneigh[i];
     jnum = numneigh[i];
     int nilp = 0;
+		dprodni[0] = 0.0;
+		dprodni[1] = 0.0;
+		dprodni[2] = 0.0;
 		
 		//TERSOFF
     itype = map[type[i]];
@@ -419,47 +423,51 @@ void PairLMFF::computeLMFFgeneral(int eflag, int vflag)
         fkcx = (delx*fsum - fp1[0])*Tap - Vilp*dTap*delx*rinv;
         fkcy = (dely*fsum - fp1[1])*Tap - Vilp*dTap*dely*rinv;
         fkcz = (delz*fsum - fp1[2])*Tap - Vilp*dTap*delz*rinv;
-
-        //This should be no use because fkcx need a lot of variables
+				
+				dprodni[0] += -prodnorm1 * fpair1 * Tap * delx;
+				dprodni[1] += -prodnorm1 * fpair1 * Tap * dely;
+				dprodni[2] += -prodnorm1 * fpair1 * Tap * delz;
+        
+				//This should be no use because fkcx need a lot of variables
         double ftotx = fvdw * delx + fkcx;
         double ftoty = fvdw * dely + fkcy;
         double ftotz = fvdw * delz + fkcz;
-        f[i][0] += ftotx - fprod1[0]*Tap;
-        f[i][1] += ftoty - fprod1[1]*Tap;
-        f[i][2] += ftotz - fprod1[2]*Tap;
+        f[i][0] += ftotx;// - fprod1[0]*Tap;
+        f[i][1] += ftoty;// - fprod1[1]*Tap;
+        f[i][2] += ftotz;// - fprod1[2]*Tap;
         f[j][0] -= ftotx;
         f[j][1] -= ftoty;
         f[j][2] -= ftotz;
 				
-        for (kk = 0; kk < nilp; kk++) 
-				{
-          k = ilp_neigh[kk];
-          dprodnorm1[0] = dnormal[kk][0][0]*delx + dnormal[kk][1][0]*dely + dnormal[kk][2][0]*delz;
-          dprodnorm1[1] = dnormal[kk][0][1]*delx + dnormal[kk][1][1]*dely + dnormal[kk][2][1]*delz;
-          dprodnorm1[2] = dnormal[kk][0][2]*delx + dnormal[kk][1][2]*dely + dnormal[kk][2][2]*delz;
-          fk[0] = (-prodnorm1*dprodnorm1[0]*fpair1)*Tap;
-          fk[1] = (-prodnorm1*dprodnorm1[1]*fpair1)*Tap;
-          fk[2] = (-prodnorm1*dprodnorm1[2]*fpair1)*Tap;
-          fkk[kk][0] += fk[0];
-          fkk[kk][1] += fk[1];
-          fkk[kk][2] += fk[2];
-          delkj[0] = x[i][0] + vet[kk][0] - x[j][0];
-          delkj[1] = x[i][1] + vet[kk][1] - x[j][1];
-          delkj[2] = x[i][2] + vet[kk][2] - x[j][2];
+        //for (kk = 0; kk < nilp; kk++) 
+				//{
+        //  k = ilp_neigh[kk];
+        //  dprodnorm1[0] = dnormal[kk][0][0]*delx + dnormal[kk][1][0]*dely + dnormal[kk][2][0]*delz;
+        //  dprodnorm1[1] = dnormal[kk][0][1]*delx + dnormal[kk][1][1]*dely + dnormal[kk][2][1]*delz;
+        //  dprodnorm1[2] = dnormal[kk][0][2]*delx + dnormal[kk][1][2]*dely + dnormal[kk][2][2]*delz;
+        //  fk[0] = (-prodnorm1*dprodnorm1[0]*fpair1)*Tap;
+        //  fk[1] = (-prodnorm1*dprodnorm1[1]*fpair1)*Tap;
+        //  fk[2] = (-prodnorm1*dprodnorm1[2]*fpair1)*Tap;
+        //  fkk[kk][0] += fk[0];
+        //  fkk[kk][1] += fk[1];
+        //  fkk[kk][2] += fk[2];
+        //  delkj[0] = x[i][0] + vet[kk][0] - x[j][0];
+        //  delkj[1] = x[i][1] + vet[kk][1] - x[j][1];
+        //  delkj[2] = x[i][2] + vet[kk][2] - x[j][2];
 
-          if (vflag_atom) 
-          {
-            if (evflag) 
-							ev_tally_buffer(k, j, ekk + kk, vkk[kk], eatom + j, vatom[j], nlocal,newton_pair, 
-															0.0,0.0,fk[0],fk[1],fk[2],delkj[0],delkj[1],delkj[2]);
-          } 
-          else 
-          {
-            if (evflag) 
-							ev_tally_buffer(k, j, ekk + kk, vkk[kk], eatom + j, NULL, nlocal,newton_pair, 
-															0.0,0.0,fk[0],fk[1],fk[2], delkj[0],delkj[1],delkj[2]);
-          }
-        }
+        //  if (vflag_atom) 
+        //  {
+        //    if (evflag) 
+				//			ev_tally_buffer(k, j, ekk + kk, vkk[kk], eatom + j, vatom[j], nlocal,newton_pair, 
+				//											0.0,0.0,fk[0],fk[1],fk[2],delkj[0],delkj[1],delkj[2]);
+        //  } 
+        //  else 
+        //  {
+        //    if (evflag) 
+				//			ev_tally_buffer(k, j, ekk + kk, vkk[kk], eatom + j, NULL, nlocal,newton_pair, 
+				//											0.0,0.0,fk[0],fk[1],fk[2], delkj[0],delkj[1],delkj[2]);
+        //  }
+        //}
         //erep = Tap*Vilp;
         if (eflag) pvector[1] += erep = Tap*Vilp;
         if (evflag) 
@@ -469,21 +477,34 @@ void PairLMFF::computeLMFFgeneral(int eflag, int vflag)
     for (kk = 0; kk < nilp; kk ++) 
 		{
       int k = ilp_neigh[kk];
+			fkk[kk][0] = dnormal[kk][0][0] * dprodni[0] + dnormal[kk][1][0] * dprodni[1] + dnormal[kk][2][0] * dprodni[2];
+			fkk[kk][1] = dnormal[kk][0][1] * dprodni[0] + dnormal[kk][1][1] * dprodni[1] + dnormal[kk][2][1] * dprodni[2];
+			fkk[kk][2] = dnormal[kk][0][2] * dprodni[0] + dnormal[kk][1][2] * dprodni[1] + dnormal[kk][2][2] * dprodni[2];
+			double rki[3];
+			rki[0] = x[k][0] - x[i][0];
+			rki[1] = x[k][1] - x[i][1];
+			rki[2] = x[k][2] - x[i][2];
+      if (evflag) 
+        ev_tally_xyz(k,i,nlocal,newton_pair,0.0,0.0,
+										fkk[kk][0], fkk[kk][1], fkk[kk][2],rki[0], rki[1], rki[2]);
       f[k][0] += fkk[kk][0];
       f[k][1] += fkk[kk][1];
       f[k][2] += fkk[kk][2];
-      if (eflag_atom) eatom[k] += ekk[kk];
-      if (vflag_atom) 
-			{
-        vatom[k][0] += vkk[kk][0];
-        vatom[k][1] += vkk[kk][1];
-        vatom[k][2] += vkk[kk][2];
-        vatom[k][3] += vkk[kk][3];
-        vatom[k][4] += vkk[kk][4];
-        vatom[k][5] += vkk[kk][5];
-      }
+      //if (eflag_atom) eatom[k] += ekk[kk];
+      //if (vflag_atom) 
+			//{
+      //  vatom[k][0] += vkk[kk][0];
+      //  vatom[k][1] += vkk[kk][1];
+      //  vatom[k][2] += vkk[kk][2];
+      //  vatom[k][3] += vkk[kk][3];
+      //  vatom[k][4] += vkk[kk][4];
+      //  vatom[k][5] += vkk[kk][5];
+      //}
     }//for-kk
-
+		
+		f[i][0] += dnormdri[0][0] * dprodni[0] + dnormdri[1][0] * dprodni[1] + dnormdri[2][0] * dprodni[2];
+		f[i][1] += dnormdri[0][1] * dprodni[0] + dnormdri[1][1] * dprodni[1] + dnormdri[2][1] * dprodni[2];
+		f[i][2] += dnormdri[0][2] * dprodni[0] + dnormdri[1][2] * dprodni[1] + dnormdri[2][2] * dprodni[2];
 		
 		/*** Tersoff ***/
     jlist = firstneigh[i];
@@ -659,6 +680,7 @@ void PairLMFF::computeLMFFOnce(int eflag, int vflag)
   double rhosq1,exp0,exp1;
   double frho1,Erep,rdsq1,fpair1;
   double dprodnorm1[3] = {0.0, 0.0, 0.0};
+	double dprodni[3] = {0.0, 0.0, 0.0};
   double fp1[3] = {0.0, 0.0, 0.0};
   double fprod1[3] = {0.0, 0.0, 0.0};
   double delkj[3] = {0.0, 0.0, 0.0};
@@ -696,6 +718,9 @@ void PairLMFF::computeLMFFOnce(int eflag, int vflag)
     jlist = firstneigh[i];
     jnum = numneigh[i];
     int nilp = 0;
+		dprodni[0] = 0.0;
+		dprodni[1] = 0.0;
+		dprodni[2] = 0.0;
 		
 		//TERSOFF
     itype = map[type[i]];
@@ -887,48 +912,52 @@ void PairLMFF::computeLMFFOnce(int eflag, int vflag)
         fkcx = (delx*fsum - fp1[0])*Tap - Vilp*dTap*delx*rinv;
         fkcy = (dely*fsum - fp1[1])*Tap - Vilp*dTap*dely*rinv;
         fkcz = (delz*fsum - fp1[2])*Tap - Vilp*dTap*delz*rinv;
-
-        //This should be no use because fkcx need a lot of variables
+				
+				dprodni[0] += -prodnorm1 * fpair1 * Tap * delx;
+				dprodni[1] += -prodnorm1 * fpair1 * Tap * dely;
+				dprodni[2] += -prodnorm1 * fpair1 * Tap * delz;
+        
+				//This should be no use because fkcx need a lot of variables
         double ftotx = fvdw * delx + fkcx;
         double ftoty = fvdw * dely + fkcy;
         double ftotz = fvdw * delz + fkcz;
-        f[i][0] += ftotx - fprod1[0]*Tap;
-        f[i][1] += ftoty - fprod1[1]*Tap;
-        f[i][2] += ftotz - fprod1[2]*Tap;
+        f[i][0] += ftotx ;//- fprod1[0]*Tap;
+        f[i][1] += ftoty ;//- fprod1[1]*Tap;
+        f[i][2] += ftotz ;//- fprod1[2]*Tap;
         f[j][0] -= ftotx;
         f[j][1] -= ftoty;
         f[j][2] -= ftotz;
 				
-        for (kk = 0; kk < nilp; kk++) 
-				{
-          k = ilp_neigh[kk];
-          dprodnorm1[0] = dnormal[kk][0][0]*delx + dnormal[kk][1][0]*dely + dnormal[kk][2][0]*delz;
-          dprodnorm1[1] = dnormal[kk][0][1]*delx + dnormal[kk][1][1]*dely + dnormal[kk][2][1]*delz;
-          dprodnorm1[2] = dnormal[kk][0][2]*delx + dnormal[kk][1][2]*dely + dnormal[kk][2][2]*delz;
-          fk[0] = (-prodnorm1*dprodnorm1[0]*fpair1)*Tap;
-          fk[1] = (-prodnorm1*dprodnorm1[1]*fpair1)*Tap;
-          fk[2] = (-prodnorm1*dprodnorm1[2]*fpair1)*Tap;
-          fkk[kk][0] += fk[0];
-          fkk[kk][1] += fk[1];
-          fkk[kk][2] += fk[2];
-          delkj[0] = x[i][0] + vet[kk][0] - x[j][0];
-          delkj[1] = x[i][1] + vet[kk][1] - x[j][1];
-          delkj[2] = x[i][2] + vet[kk][2] - x[j][2];
+        //for (kk = 0; kk < nilp; kk++) 
+				//{
+        //  k = ilp_neigh[kk];
+        //  dprodnorm1[0] = dnormal[kk][0][0]*delx + dnormal[kk][1][0]*dely + dnormal[kk][2][0]*delz;
+        //  dprodnorm1[1] = dnormal[kk][0][1]*delx + dnormal[kk][1][1]*dely + dnormal[kk][2][1]*delz;
+        //  dprodnorm1[2] = dnormal[kk][0][2]*delx + dnormal[kk][1][2]*dely + dnormal[kk][2][2]*delz;
+        //  fk[0] = (-prodnorm1*dprodnorm1[0]*fpair1)*Tap;
+        //  fk[1] = (-prodnorm1*dprodnorm1[1]*fpair1)*Tap;
+        //  fk[2] = (-prodnorm1*dprodnorm1[2]*fpair1)*Tap;
+        //  fkk[kk][0] += fk[0];
+        //  fkk[kk][1] += fk[1];
+        //  fkk[kk][2] += fk[2];
+        //  delkj[0] = x[i][0] + vet[kk][0] - x[j][0];
+        //  delkj[1] = x[i][1] + vet[kk][1] - x[j][1];
+        //  delkj[2] = x[i][2] + vet[kk][2] - x[j][2];
 
 
-          if (vflag_atom) 
-          {
-            if (evflag) 
-							ev_tally_buffer(k, j, ekk + kk, vkk[kk], eatom + j, vatom[j], nlocal,newton_pair,
-															0.0,0.0,fk[0],fk[1],fk[2], delkj[0],delkj[1],delkj[2]);
-          } 
-          else 
-          {
-            if (evflag) 
-							ev_tally_buffer(k, j, ekk + kk, vkk[kk], eatom + j, NULL, nlocal,newton_pair,
-															0.0,0.0,fk[0],fk[1],fk[2],delkj[0],delkj[1],delkj[2]);
-          }
-        }
+        //  if (vflag_atom) 
+        //  {
+        //    if (evflag) 
+				//			ev_tally_buffer(k, j, ekk + kk, vkk[kk], eatom + j, vatom[j], nlocal,newton_pair,
+				//											0.0,0.0,fk[0],fk[1],fk[2], delkj[0],delkj[1],delkj[2]);
+        //  } 
+        //  else 
+        //  {
+        //    if (evflag) 
+				//			ev_tally_buffer(k, j, ekk + kk, vkk[kk], eatom + j, NULL, nlocal,newton_pair,
+				//											0.0,0.0,fk[0],fk[1],fk[2],delkj[0],delkj[1],delkj[2]);
+        //  }
+        //}
         //erep = Tap*Vilp;
         if (eflag) pvector[1] += erep = Tap*Vilp;
         if (evflag) 
@@ -966,21 +995,34 @@ void PairLMFF::computeLMFFOnce(int eflag, int vflag)
     for (kk = 0; kk < nilp; kk ++) 
 		{
       int k = ilp_neigh[kk];
+			fkk[kk][0] = dnormal[kk][0][0] * dprodni[0] + dnormal[kk][1][0] * dprodni[1] + dnormal[kk][2][0] * dprodni[2];
+			fkk[kk][1] = dnormal[kk][0][1] * dprodni[0] + dnormal[kk][1][1] * dprodni[1] + dnormal[kk][2][1] * dprodni[2];
+			fkk[kk][2] = dnormal[kk][0][2] * dprodni[0] + dnormal[kk][1][2] * dprodni[1] + dnormal[kk][2][2] * dprodni[2];
+			double rki[3];
+			rki[0] = x[k][0] - x[i][0];
+			rki[1] = x[k][1] - x[i][1];
+			rki[2] = x[k][2] - x[i][2];
+      if (evflag) 
+        ev_tally_xyz(k,i,nlocal,newton_pair,0.0,0.0,
+										fkk[kk][0], fkk[kk][1], fkk[kk][2],rki[0], rki[1], rki[2]);
       f[k][0] += fkk[kk][0];
       f[k][1] += fkk[kk][1];
       f[k][2] += fkk[kk][2];
-      if (eflag_atom) eatom[k] += ekk[kk];
-      if (vflag_atom) 
-			{
-        vatom[k][0] += vkk[kk][0];
-        vatom[k][1] += vkk[kk][1];
-        vatom[k][2] += vkk[kk][2];
-        vatom[k][3] += vkk[kk][3];
-        vatom[k][4] += vkk[kk][4];
-        vatom[k][5] += vkk[kk][5];
-      }
+      //if (eflag_atom) eatom[k] += ekk[kk];
+      //if (vflag_atom) 
+			//{
+      //  vatom[k][0] += vkk[kk][0];
+      //  vatom[k][1] += vkk[kk][1];
+      //  vatom[k][2] += vkk[kk][2];
+      //  vatom[k][3] += vkk[kk][3];
+      //  vatom[k][4] += vkk[kk][4];
+      //  vatom[k][5] += vkk[kk][5];
+      //}
     }//for-kk
-
+		
+		f[i][0] += dnormdri[0][0] * dprodni[0] + dnormdri[1][0] * dprodni[1] + dnormdri[2][0] * dprodni[2];
+		f[i][1] += dnormdri[0][1] * dprodni[0] + dnormdri[1][1] * dprodni[1] + dnormdri[2][1] * dprodni[2];
+		f[i][2] += dnormdri[0][2] * dprodni[0] + dnormdri[1][2] * dprodni[1] + dnormdri[2][2] * dprodni[2];
 		
 		/*** Tersoff ***/
     jlist = firstneigh[i];
@@ -1158,6 +1200,7 @@ void PairLMFF::computeLMFFTwice(int eflag, int vflag)
   double rhosq1,exp0,exp1;
   double frho1,Erep,rdsq1,fpair1;
   double dprodnorm1[3] = {0.0, 0.0, 0.0};
+	double dprodni[3] = {0.0, 0.0, 0.0};
   double fp1[3] = {0.0, 0.0, 0.0};
   double fprod1[3] = {0.0, 0.0, 0.0};
   double delkj[3] = {0.0, 0.0, 0.0};
@@ -1197,6 +1240,10 @@ void PairLMFF::computeLMFFTwice(int eflag, int vflag)
     jlist = firstneigh[i];
     jnum = numneigh[i];
     int nilp = 0;
+		dprodni[0] = 0.0;
+		dprodni[1] = 0.0;
+		dprodni[2] = 0.0;
+
 		
 		//TERSOFF
     itype = map[type[i]];
@@ -1389,47 +1436,51 @@ void PairLMFF::computeLMFFTwice(int eflag, int vflag)
         fkcx = (delx*fsum - fp1[0])*Tap - Vilp*dTap*delx*rinv;
         fkcy = (dely*fsum - fp1[1])*Tap - Vilp*dTap*dely*rinv;
         fkcz = (delz*fsum - fp1[2])*Tap - Vilp*dTap*delz*rinv;
+				
+				dprodni[0] += -prodnorm1 * fpair1 * Tap * delx;
+				dprodni[1] += -prodnorm1 * fpair1 * Tap * dely;
+				dprodni[2] += -prodnorm1 * fpair1 * Tap * delz;
 
         //This should be no use because fkcx need a lot of variables
         double ftotx = fvdw * delx + fkcx;
         double ftoty = fvdw * dely + fkcy;
         double ftotz = fvdw * delz + fkcz;
-        f[i][0] += ftotx - fprod1[0]*Tap;
-        f[i][1] += ftoty - fprod1[1]*Tap;
-        f[i][2] += ftotz - fprod1[2]*Tap;
+        f[i][0] += ftotx ;//- fprod1[0]*Tap;
+        f[i][1] += ftoty ;//- fprod1[1]*Tap;
+        f[i][2] += ftotz ;//- fprod1[2]*Tap;
         f[j][0] -= ftotx;
         f[j][1] -= ftoty;
         f[j][2] -= ftotz;
 
-        for (kk = 0; kk < nilp; kk++) 
-				{
-          k = ilp_neigh[kk];
-          dprodnorm1[0] = dnormal[kk][0][0]*delx + dnormal[kk][1][0]*dely + dnormal[kk][2][0]*delz;
-          dprodnorm1[1] = dnormal[kk][0][1]*delx + dnormal[kk][1][1]*dely + dnormal[kk][2][1]*delz;
-          dprodnorm1[2] = dnormal[kk][0][2]*delx + dnormal[kk][1][2]*dely + dnormal[kk][2][2]*delz;
-          fk[0] = (-prodnorm1*dprodnorm1[0]*fpair1)*Tap;
-          fk[1] = (-prodnorm1*dprodnorm1[1]*fpair1)*Tap;
-          fk[2] = (-prodnorm1*dprodnorm1[2]*fpair1)*Tap;
-          fkk[kk][0] += fk[0];
-          fkk[kk][1] += fk[1];
-          fkk[kk][2] += fk[2];
-          delkj[0] = x[i][0] + vet[kk][0] - x[j][0];
-          delkj[1] = x[i][1] + vet[kk][1] - x[j][1];
-          delkj[2] = x[i][2] + vet[kk][2] - x[j][2];
+        //for (kk = 0; kk < nilp; kk++) 
+				//{
+        //  k = ilp_neigh[kk];
+        //  dprodnorm1[0] = dnormal[kk][0][0]*delx + dnormal[kk][1][0]*dely + dnormal[kk][2][0]*delz;
+        //  dprodnorm1[1] = dnormal[kk][0][1]*delx + dnormal[kk][1][1]*dely + dnormal[kk][2][1]*delz;
+        //  dprodnorm1[2] = dnormal[kk][0][2]*delx + dnormal[kk][1][2]*dely + dnormal[kk][2][2]*delz;
+        //  fk[0] = (-prodnorm1*dprodnorm1[0]*fpair1)*Tap;
+        //  fk[1] = (-prodnorm1*dprodnorm1[1]*fpair1)*Tap;
+        //  fk[2] = (-prodnorm1*dprodnorm1[2]*fpair1)*Tap;
+        //  fkk[kk][0] += fk[0];
+        //  fkk[kk][1] += fk[1];
+        //  fkk[kk][2] += fk[2];
+        //  delkj[0] = x[i][0] + vet[kk][0] - x[j][0];
+        //  delkj[1] = x[i][1] + vet[kk][1] - x[j][1];
+        //  delkj[2] = x[i][2] + vet[kk][2] - x[j][2];
 
-          if (vflag_atom) 
-          {
-            if (evflag) 
-							ev_tally_buffer(k, j, ekk + kk, vkk[kk], eatom + j, vatom[j], nlocal,newton_pair,
-															0.0,0.0,fk[0],fk[1],fk[2], delkj[0],delkj[1],delkj[2]);
-          } 
-          else 
-          {
-            if (evflag) 
-							ev_tally_buffer(k, j, ekk + kk, vkk[kk], eatom + j, NULL, nlocal,newton_pair,
-															0.0,0.0,fk[0],fk[1],fk[2], delkj[0],delkj[1],delkj[2]);
-          }
-        }
+        //  if (vflag_atom) 
+        //  {
+        //    if (evflag) 
+				//			ev_tally_buffer(k, j, ekk + kk, vkk[kk], eatom + j, vatom[j], nlocal,newton_pair,
+				//											0.0,0.0,fk[0],fk[1],fk[2], delkj[0],delkj[1],delkj[2]);
+        //  } 
+        //  else 
+        //  {
+        //    if (evflag) 
+				//			ev_tally_buffer(k, j, ekk + kk, vkk[kk], eatom + j, NULL, nlocal,newton_pair,
+				//											0.0,0.0,fk[0],fk[1],fk[2], delkj[0],delkj[1],delkj[2]);
+        //  }
+        //}
         //erep = Tap*Vilp;
         if (eflag) pvector[1] += erep = Tap*Vilp;
         if (evflag) 
@@ -1439,20 +1490,33 @@ void PairLMFF::computeLMFFTwice(int eflag, int vflag)
     for (kk = 0; kk < nilp; kk ++) 
 		{
       int k = ilp_neigh[kk];
+			fkk[kk][0] = dnormal[kk][0][0] * dprodni[0] + dnormal[kk][1][0] * dprodni[1] + dnormal[kk][2][0] * dprodni[2];
+			fkk[kk][1] = dnormal[kk][0][1] * dprodni[0] + dnormal[kk][1][1] * dprodni[1] + dnormal[kk][2][1] * dprodni[2];
+			fkk[kk][2] = dnormal[kk][0][2] * dprodni[0] + dnormal[kk][1][2] * dprodni[1] + dnormal[kk][2][2] * dprodni[2];
+			double rki[3];
+			rki[0] = x[k][0] - x[i][0];
+			rki[1] = x[k][1] - x[i][1];
+			rki[2] = x[k][2] - x[i][2];
+      if (evflag) 
+        ev_tally_xyz(k,i,nlocal,newton_pair,0.0,0.0,
+										fkk[kk][0], fkk[kk][1], fkk[kk][2],rki[0], rki[1], rki[2]);
       f[k][0] += fkk[kk][0];
       f[k][1] += fkk[kk][1];
       f[k][2] += fkk[kk][2];
-      if (eflag_atom) eatom[k] += ekk[kk];
-      if (vflag_atom) 
-			{
-        vatom[k][0] += vkk[kk][0];
-        vatom[k][1] += vkk[kk][1];
-        vatom[k][2] += vkk[kk][2];
-        vatom[k][3] += vkk[kk][3];
-        vatom[k][4] += vkk[kk][4];
-        vatom[k][5] += vkk[kk][5];
-      }
+      //if (eflag_atom) eatom[k] += ekk[kk];
+      //if (vflag_atom) 
+			//{
+      //  vatom[k][0] += vkk[kk][0];
+      //  vatom[k][1] += vkk[kk][1];
+      //  vatom[k][2] += vkk[kk][2];
+      //  vatom[k][3] += vkk[kk][3];
+      //  vatom[k][4] += vkk[kk][4];
+      //  vatom[k][5] += vkk[kk][5];
+      //}
     }//for-kk
+		f[i][0] += dnormdri[0][0] * dprodni[0] + dnormdri[1][0] * dprodni[1] + dnormdri[2][0] * dprodni[2];
+		f[i][1] += dnormdri[0][1] * dprodni[0] + dnormdri[1][1] * dprodni[1] + dnormdri[2][1] * dprodni[2];
+		f[i][2] += dnormdri[0][2] * dprodni[0] + dnormdri[1][2] * dprodni[1] + dnormdri[2][2] * dprodni[2];
 
 		
 		/*** Tersoff ***/
