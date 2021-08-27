@@ -22,9 +22,9 @@
 The installation process is as follows:
 ```
  make yes-USER-MISC
- make yes-MOLECULE # (atom style:full) 
- make yes-MANYBODY # (Tersoff potential)   
+ make yes-MOLECULE
+ make yes-MANYBODY 
  make yes-USER-LMFF
 ```
-* **Note:** make yes-USER-LMFF needs to be executed at the end.
+* **Note:** *make yes-USER-LMFF* needs to be executed at the end.
 
