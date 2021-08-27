@@ -16,7 +16,7 @@
 * Output: Reported performance in LAMMPS.
 * Publicly available?: Yes.
 
-## C.Summary of the USER-LMFF Package
+## C.SUMMARY OF THE USER-LMFF PACKAGE
 * Recently, we have made some improvements and optimizations on the virial stress part of the calculation of interlayer forces. And, based on the stable version of LAMMPS: 3Mar2020, we installed, compiled and tested it on Sunway TaihuLight.
 * In order to facilitate the installation and use, we follow the conventional practice in LAMMPS and use the latest LMFF code as an installation package.
 The installation process is as follows:
